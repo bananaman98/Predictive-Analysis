@@ -1,0 +1,235 @@
+# Load necessary libraries
+library(AER)
+library(stargazer)
+library(readxl)
+library(lmtest)
+
+# Load the data
+data <- read_excel("nls80.xlsx")
+
+#Q 1 A, B, C, D, E
+
+# 2. Estimate the model using (OLS)
+model_ols <- lm(lwage ~ educ + exper + tenure + sibs, data = data)
+summary(model_ols)
+
+# 4. Re-run the regression using 2SLS and GMM
+# 2SLS
+model_2sls <- ivreg(lwage ~ educ + exper + tenure + sibs| exper + tenure + sibs + feduc, data = data)
+summary(model_2sls)
+
+# GMM
+model_gmm <- ivreg(lwage ~ educ + exper + tenure + sibs | exper + tenure + sibs + feduc, 
+                   data = data, method = "GMM")
+summary(model_gmm)
+
+# Compare OLS, 2SLS, and GMM estimates
+stargazer(model_ols, model_2sls, model_gmm, 
+          type = "text", 
+          column.labels = c("OLS", "2SLS", "GMM"),
+          dep.var.labels = "Wage",
+          covariate.labels = c("Education", "Experience", "Tenure", "Number of Siblings", "Father's Education", "Constant"),
+          omit.stat = c("f", "ser"))
+
+
+if (!requireNamespace("readxl", quietly = TRUE)) install.packages("readxl")
+if (!requireNamespace("lmtest", quietly = TRUE)) install.packages("lmtest")
+if (!requireNamespace("car", quietly = TRUE)) install.packages("car")
+
+library(readxl)
+library(lmtest)
+library(car)
+library(sandwich)
+# Load the data
+data <- read_excel("nls80.xlsx")
+
+# 1. The differences between equations are explained in the comments
+
+# 2. Estimate the two equations using OLS
+model1 <- lm(wage ~ educ + hours, data = data)
+model2 <- lm(lwage ~ educ + hours, data = data)
+
+# Display summary of both models
+summary(model1)
+summary(model2)
+
+# 3. Test for heteroskedasticity
+bptest(model1)
+bptest(model2)
+
+
+# 4. Test for serial correlation
+print("Durbin-Watson test for first-order serial correlation:")
+print("Model 1 (wage):")
+dwtest(model1)
+print("Model 2 (lwage):")
+dwtest(model2)
+
+# Adding Breusch-Godfrey test for higher-order serial correlation
+print("Breusch-Godfrey test for serial correlation:")
+print("Model 1 (wage):")
+bgtest(model1, order = 1)  # Testing up to 3rd order serial correlation
+print("Model 2 (lwage):")
+bgtest(model2, order = 1)  # Testing up to 3rd order serial correlation
+
+# 5. Robust standard errors to account for heteroskedasticity
+coeftest(model1, vcov = vcovHC(model1, type = "HC0"))
+coeftest(model2, vcov = vcovHC(model2, type = "HC0"))
+
+
+# 6. Robust standard errors to account for autocorrelation
+coeftest(model1, vcov = vcovHC(model1, type = "HC1"))
+coeftest(model2, vcov = vcovHC(model2, type = "HC1"))
+
+
+#Q 2 A, B, C, D, E
+
+library(AER)
+library(MASS)
+library(margins)
+library(lmtest)
+library(gmm)
+library(ggplot2)
+library(gridExtra)
+library(readxl)
+# Load data
+data <- read_excel("nls80.xlsx")
+
+numericvars <- sapply(data, is.numeric)
+numericvars
+
+
+data$meduc <- as.numeric(levels(factor(data$meduc)))[as.integer(factor(data$meduc))]
+data$brthord <- as.numeric(levels(factor(data$brthord)))[as.integer(factor(data$brthord))]
+data$feduc <- as.numeric(levels(factor(data$feduc)))[as.integer(factor(data$feduc))]
+
+
+
+data <- na.omit(data)   # remove missing values
+
+
+
+str(data)
+
+# Create postgrad variable
+data$postgrad <- ifelse(data$educ > 16, 1, 0)
+
+# Logit model using GLM
+logit_model <- glm(postgrad ~ age + iq + married + black + south + urban + sibs + feduc, 
+                   family = binomial(link = "logit"), data = data)
+summary(logit_model)
+
+# Probit model using GLM
+probit_model <- glm(postgrad ~ age + iq + married + black + south + urban + sibs + feduc, 
+                    family = binomial(link = "probit"), data = data)
+summary(probit_model)
+
+# Marginal effects
+margins_logit <- margins(logit_model)
+summary(margins_logit)
+
+margins_probit <- margins(probit_model)
+summary(margins_probit)
+
+# Plot estimated probabilities
+data$pred_logit <- predict(logit_model, type = "response")
+data$pred_probit <- predict(probit_model, type = "response")
+
+p1 <- ggplot(data, aes(x = iq, y = pred_logit)) +
+  geom_point(alpha = 0.3) +
+  geom_smooth(method = "loess", se = FALSE) +
+  labs(title = "Logit: Estimated Probability of Postgrad by IQ",
+       x = "IQ", y = "Probability of Postgrad")
+
+p2 <- ggplot(data, aes(x = iq, y = pred_probit)) +
+  geom_point(alpha = 0.3) +
+  geom_smooth(method = "loess", se = FALSE) +
+  labs(title = "Probit: Estimated Probability of Postgrad by IQ",
+       x = "IQ", y = "Probability of Postgrad")
+
+grid.arrange(p1, p2, ncol = 2)
+
+
+
+#Q 3 A, #Q 3 B, #Q 3 C
+# Set seed for reproducibility
+set.seed(123)
+
+# True parameter values
+beta0 <- 500
+beta1 <- 50  # education
+beta2 <- 20  # experience
+
+# Number of observations and simulations
+n <- 1000
+n_sims <- 1000
+
+# Function to generate data
+generate_data <- function(n) {
+  # Generate exogenous variables
+  exper <- runif(n, 0, 20)
+  sibs <- rpois(n, 2)
+  feduc <- rnorm(n, 12, 3)
+  
+  # Generate endogenous education
+  v <- rnorm(n, 0, 5)
+  educ <- 10 + 0.2 * sibs + 0.5 * feduc + v
+  
+  # Generate error term correlated with education
+  u <- rnorm(n, 0, 100) + 5 * v
+  
+  # Generate wage and take logarithm
+  wage <- beta0 + beta1 * educ + beta2 * exper + u
+  lwage <- log(wage)  # Log transformation for normality
+  
+  data.frame(lwage, educ, exper, feduc)
+}
+
+# Function to estimate models and return coefficients
+estimate_models <- function(data) {
+  ols <- lm(lwage ~ educ + exper, data = data)
+  return(coef(ols)[2:3])  # Store only Education and Experience coefficients
+}
+
+# Perform Monte Carlo simulation (Q3)
+results <- replicate(n_sims, {
+  data <- generate_data(n)
+  estimate_models(data)
+})
+
+# Ensure results are in correct format
+results <- t(results)  # Transpose matrix for proper alignment
+
+# Calculate means and variances
+means <- colMeans(results)
+variances <- apply(results, 2, var)
+
+# Create results table
+results_table <- data.frame(
+  Coefficient = c("Education", "Experience"),
+  True_Value = c(beta1, beta2),
+  Estimate = means,
+  Bias = means - c(beta1, beta2),
+  Variance = variances
+)
+
+# Print results
+print(results_table, digits = 4)
+
+# Visualize distributions
+par(mfrow = c(1,2))  # Set layout for two plots
+boxplot(results[,1], main = "Distribution of Education Coefficients", ylab = "Estimate")
+abline(h = beta1, col = "red", lwd = 2)
+
+boxplot(results[,2], main = "Distribution of Experience Coefficients", ylab = "Estimate")
+abline(h = beta2, col = "red", lwd = 2)
+
+# 4. Re-run the regression using 2SLS
+# 2SLS
+
+
+
+#Q 3 D
+
+
+#Q 3 E
